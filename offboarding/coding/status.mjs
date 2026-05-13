@@ -14,6 +14,7 @@ import { join } from 'node:path'
 import {
   fileExists,
   findGitRootFromCwd,
+  findJogHomeWorktrees,
   findJoggrCliDeps,
   findJoggrEntries,
   findJoggrHooks,
@@ -22,6 +23,7 @@ import {
   getClaudeSettingsPath,
   hasBinary,
   isJoggrCommand,
+  shellQuote,
 } from './lib/utils.mjs'
 
 const findings = []
@@ -33,6 +35,7 @@ await checkCli()
 await checkHook()
 await checkGgEntries()
 await checkProjectDep()
+await checkJogHomeWorktrees()
 await checkBackup()
 
 const fails = findings.filter((f) => f.kind === 'fail').length
@@ -114,6 +117,37 @@ async function checkGgEntries() {
     if (entries.length === 0) pass(`No gg-* entries in ${path}`)
     else fail(`${entries.length} gg-* entries remain in ${path}`, `entries: ${entries.join(', ')}`)
   }
+}
+
+async function checkJogHomeWorktrees() {
+  // The jog CLI manages git worktrees under ~/.joggr/worktrees and
+  // ~/.joggr-dev/worktrees. Naive `rm -rf ~/.joggr` would orphan every
+  // one of those worktrees in their source repos (refs left dangling,
+  // unpushed branch work lost). We never auto-remove — just report
+  // them with the proper `git worktree remove` recipe.
+  const worktrees = await findJogHomeWorktrees()
+  if (worktrees.length === 0) {
+    pass('No jog-managed git worktrees under ~/.joggr or ~/.joggr-dev')
+    return
+  }
+  /** @type {Map<string, typeof worktrees>} */
+  const bySource = new Map()
+  for (const w of worktrees) {
+    const key = w.sourceRepo ?? '(unknown source repo)'
+    if (!bySource.has(key)) bySource.set(key, [])
+    bySource.get(key).push(w)
+  }
+  const lines = []
+  for (const [source, list] of bySource) {
+    lines.push(`    Source: ${source} (${list.length} worktree${list.length === 1 ? '' : 's'})`)
+    for (const w of list) {
+      lines.push(`      git -C ${shellQuote(source)} worktree remove --force ${shellQuote(w.path)}`)
+    }
+  }
+  todo(
+    `${worktrees.length} jog-managed git worktree${worktrees.length === 1 ? '' : 's'} under ~/.joggr / ~/.joggr-dev`,
+    `Remove with \`git worktree remove\` BEFORE \`rm -rf ~/.joggr*\` — otherwise branch refs orphan and unpushed work is lost:\n${lines.join('\n')}\n    Then: rm -rf ~/.joggr ~/.joggr-dev`
+  )
 }
 
 async function checkBackup() {

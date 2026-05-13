@@ -140,7 +140,7 @@ describe('status.mjs', () => {
 
   it('exits 0 on a clean machine', async () => {
     const res = run(STATUS, {
-      env: { CLAUDE_HOME: fake, JOGGR_OFFBOARD_BACKUP_DIR: backup },
+      env: { CLAUDE_HOME: fake, HOME: fake, JOGGR_OFFBOARD_BACKUP_DIR: backup },
       args: [],
     })
     assert.equal(res.status, 0, res.stdout + res.stderr)
@@ -153,7 +153,7 @@ describe('status.mjs', () => {
     await writeSettings(join(fake, 'settings.json'))
 
     const res = run(STATUS, {
-      env: { CLAUDE_HOME: fake, JOGGR_OFFBOARD_BACKUP_DIR: backup },
+      env: { CLAUDE_HOME: fake, HOME: fake, JOGGR_OFFBOARD_BACKUP_DIR: backup },
       args: [],
     })
     assert.equal(res.status, 1)

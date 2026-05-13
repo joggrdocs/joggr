@@ -158,6 +158,105 @@ export async function findGitRootFromCwd(startDir = process.cwd()) {
  * @param {string} root
  * @returns {Promise<Array<{ path: string, field: string, name: string }>>}
  */
+/**
+ * @typedef {object} JogWorktree
+ * @property {string} path        - Absolute path to the worktree dir.
+ * @property {string} jogHome     - The ~/.joggr or ~/.joggr-dev root.
+ * @property {string | null} sourceRepo - Source repo dir derived from `.git`
+ *   pointer, or null if missing/invalid.
+ */
+
+/**
+ * Enumerate jog-managed git worktrees under `~/.joggr/worktrees` and
+ * `~/.joggr-dev/worktrees`. Each entry returns the source repo path
+ * extracted from the worktree's `.git` pointer file so the user can
+ * issue the correct `git worktree remove` command.
+ *
+ * Returns `[]` when neither home dir exists.
+ *
+ * @returns {Promise<JogWorktree[]>}
+ */
+export async function findJogHomeWorktrees() {
+  /** @type {JogWorktree[]} */
+  const out = []
+  for (const home of [join(homedir(), '.joggr'), join(homedir(), '.joggr-dev')]) {
+    const root = join(home, 'worktrees')
+    if (!(await fileExists(root))) continue
+    await walkForWorktrees(root, home, out)
+  }
+  return out
+}
+
+/**
+ * Walk `dir` and push every leaf worktree (any directory containing a
+ * `.git` *file*, not directory) into `out`.
+ *
+ * @private
+ * @param {string} dir
+ * @param {string} jogHome
+ * @param {JogWorktree[]} out
+ */
+async function walkForWorktrees(dir, jogHome, out) {
+  let entries
+  try {
+    entries = await readdir(dir, { withFileTypes: true })
+  } catch {
+    return
+  }
+  const gitEntry = entries.find((e) => e.name === '.git')
+  if (gitEntry && gitEntry.isFile()) {
+    out.push({
+      path: dir,
+      jogHome,
+      sourceRepo: await readSourceRepoFromGitFile(join(dir, '.git')),
+    })
+    return
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) await walkForWorktrees(join(dir, entry.name), jogHome, out)
+  }
+}
+
+/**
+ * Read a worktree's `.git` pointer file and derive the source repo path.
+ *
+ * The file looks like:
+ *   gitdir: /Users/zac/Code/joggr/serenity/.git/worktrees/chore-dev-scripts
+ *
+ * Source repo is the dir containing the `.git/` whose `worktrees/` this
+ * lives under — i.e. everything up to (but not including) `/.git/`.
+ *
+ * @private
+ * @param {string} gitFilePath
+ * @returns {Promise<string | null>}
+ */
+async function readSourceRepoFromGitFile(gitFilePath) {
+  try {
+    const raw = await readFile(gitFilePath, 'utf-8')
+    const m = raw.match(/^gitdir:\s*(.+)$/m)
+    if (!m) return null
+    const gitdir = m[1].trim()
+    const idx = gitdir.indexOf('/.git/')
+    if (idx < 0) return null
+    return gitdir.slice(0, idx)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Quote a single shell argument so it survives copy-paste even when it
+ * contains spaces or special characters.
+ *
+ * @param {string} arg
+ * @returns {string}
+ */
+export function shellQuote(arg) {
+  if (arg === '') return "''"
+  if (/^[A-Za-z0-9@%+=:,./_-]+$/.test(arg)) return arg
+  return `'${arg.replace(/'/g, `'\\''`)}'`
+}
+
 export async function findJoggrCliDeps(root) {
   const skipDirs = new Set([
     'node_modules',

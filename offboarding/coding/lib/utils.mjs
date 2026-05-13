@@ -2,16 +2,17 @@
  * Shared helpers for the offboarding scripts. Node 20+, no runtime deps.
  */
 
-import { access, constants, readdir, rename } from 'node:fs/promises'
+import { access, constants, readFile, readdir, rename } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { homedir } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 
 import {
   JOGGR_BACKUP_DIRNAME,
   JOGGR_BINARY_NAMES,
   JOGGR_HOOK_MATCHER,
   JOGGR_NAME_PREFIX,
+  JOGGR_PACKAGE_NAMES,
 } from './constants.mjs'
 
 /** True if `path` exists and is accessible (any error → false). */
@@ -127,4 +128,85 @@ export function getPostOffboardSettingsPath() {
 
 export function getBackupSubdir(subdir) {
   return join(getBackupDir(), subdir)
+}
+
+/**
+ * Walk upward from `startDir` looking for a `.git` entry. Stops at the
+ * filesystem root or `$HOME`, whichever comes first.
+ *
+ * @param {string} [startDir]
+ * @returns {Promise<string | null>}
+ */
+export async function findGitRootFromCwd(startDir = process.cwd()) {
+  const home = homedir()
+  let current = resolve(startDir)
+  while (true) {
+    if (await fileExists(join(current, '.git'))) return current
+    const parent = dirname(current)
+    if (parent === current) return null
+    if (current === home) return null
+    current = parent
+  }
+}
+
+/**
+ * Walk `root` looking for `package.json` files that list any
+ * `JOGGR_PACKAGE_NAMES` in their dependencies / devDependencies /
+ * peerDependencies / optionalDependencies. Returns the absolute path
+ * and which field hit. Skips `node_modules` and common build dirs.
+ *
+ * @param {string} root
+ * @returns {Promise<Array<{ path: string, field: string, name: string }>>}
+ */
+export async function findJoggrCliDeps(root) {
+  const skipDirs = new Set([
+    'node_modules',
+    '.git',
+    'dist',
+    'build',
+    'out',
+    '.next',
+    '.turbo',
+    '.cache',
+    'coverage',
+  ])
+  const fields = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']
+  /** @type {Array<{ path: string, field: string, name: string }>} */
+  const matches = []
+
+  async function walk(dir) {
+    let entries
+    try {
+      entries = await readdir(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      const full = join(dir, entry.name)
+      if (entry.isFile() && entry.name === 'package.json') {
+        try {
+          const pkg = JSON.parse(await readFile(full, 'utf-8'))
+          for (const field of fields) {
+            const deps = pkg[field]
+            if (!deps || typeof deps !== 'object') continue
+            for (const name of JOGGR_PACKAGE_NAMES) {
+              if (name in deps) {
+                matches.push({ path: full, field, name })
+                break
+              }
+            }
+          }
+        } catch {
+          // Skip unreadable / unparseable package.json silently.
+        }
+        continue
+      }
+      if (entry.isDirectory() && !skipDirs.has(entry.name)) {
+        await walk(full)
+      }
+    }
+  }
+
+  await walk(root)
+  return matches
 }

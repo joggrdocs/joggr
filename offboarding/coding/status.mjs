@@ -13,6 +13,8 @@ import { join } from 'node:path'
 
 import {
   fileExists,
+  findGitRootFromCwd,
+  findJoggrCliDeps,
   findJoggrEntries,
   findJoggrHooks,
   getBackupDir,
@@ -30,6 +32,7 @@ console.log('--------------------------\n')
 await checkCli()
 await checkHook()
 await checkGgEntries()
+await checkProjectDep()
 await checkBackup()
 
 const fails = findings.filter((f) => f.kind === 'fail').length
@@ -49,6 +52,27 @@ async function checkCli() {
   } else {
     fail(`${stuck.join(' / ')} still on PATH`, 'Uninstall manually: npm/pnpm/bun remove -g @joggr/cli')
   }
+}
+
+async function checkProjectDep() {
+  // Walking up from CWD so the check works whether the user invoked
+  // status.mjs from inside the offboarding tool dir or from anywhere
+  // under their project tree.
+  const gitRoot = await findGitRootFromCwd()
+  if (!gitRoot) {
+    pass('No nearby git repo to scan for project-level @joggr/cli dependency')
+    return
+  }
+  const matches = await findJoggrCliDeps(gitRoot)
+  if (matches.length === 0) {
+    pass(`No package.json under ${gitRoot} lists @joggr/cli as a dependency`)
+    return
+  }
+  const list = matches.map((m) => `    - ${m.path}  (${m.field})`).join('\n')
+  todo(
+    `@joggr/cli is still a dependency in ${matches.length} package.json file${matches.length === 1 ? '' : 's'}`,
+    `Remove it and re-install, otherwise the next install will pull it back in:\n${list}`
+  )
 }
 
 async function checkHook() {

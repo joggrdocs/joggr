@@ -9,6 +9,9 @@ export const JOGGR_HOOK_MATCHER = 'ExitPlanMode'
 /** Binaries Joggr publishes as the `bin` field of @joggr/cli. */
 export const JOGGR_BINARY_NAMES = Object.freeze(['jog', 'joggr'])
 
+/** npm package names we look for in project package.json dependencies. */
+export const JOGGR_PACKAGE_NAMES = Object.freeze(['@joggr/cli'])
+
 /** Directory name for the offboarding backup (peer to ~/.claude/). */
 export const JOGGR_BACKUP_DIRNAME = '.joggr-offboard-backup'
 

@@ -1,4 +1,8 @@
-<div align="center">
+> [!CAUTION]
+> **Joggr is shut down.** This repository is archived and unmaintained.
+> Do not depend on it for production use.
+
+---<div align="center">
 
 # Joggr
 

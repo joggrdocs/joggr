@@ -2,7 +2,9 @@
 > **Joggr is shut down.** This repository is archived and unmaintained.
 > Do not depend on it for production use.
 
----<div align="center">
+---
+
+<div align="center">
 
 # Joggr
 
@@ -10,7 +12,7 @@
 
 ---
 
-<img src="./.github/assets/banner.svg" alt="Joggr Banner" width="100%" />
+<img src="./.github/assets/new-journey.png" alt="One door closes, another opens" width="100%" />
 
 [![Roadmap](https://img.shields.io/badge/Roadmap-8B5CF6?style=for-the-badge&logo=googlemaps&logoColor=white)](https://github.com/orgs/joggrdocs/projects/9)
 [![Issues](https://img.shields.io/badge/Issues-8B5CF6?style=for-the-badge&logo=github&logoColor=white)](https://github.com/joggrdocs/home/issues)
